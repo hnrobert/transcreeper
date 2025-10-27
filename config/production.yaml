@@ -1,0 +1,36 @@
+# Production configuration
+model:
+  size: "large-v3"
+  device: "auto" # auto, cuda, cpu
+  compute_type: "float16" # float16, int8, float32
+  use_optimized: true # Use optimized settings for lower latency (recommended)
+
+audio:
+  sample_rate: 16000
+  chunk_duration: 0.5 # 500ms
+  buffer_size: 2.0 # 2 seconds
+
+performance:
+  beam_size: 5
+  best_of: 5
+  patience: 1.0
+  length_penalty: 0.8
+  temperature: 0.0
+  vad_filter: true
+  vad_threshold: 0.5
+  # Optimized mode settings (when use_optimized is true)
+  optimized:
+    beam_size: 3
+    best_of: 1
+    compression_ratio_threshold: 2.4
+    log_prob_threshold: -0.5
+    no_speech_threshold: 0.3
+
+subtitle:
+  max_buffer_size: 10 # Maximum number of captions to buffer
+  auto_language_detection: true
+  language_detection_threshold: 0.8
+
+logging:
+  level: "INFO"
+  file: "transcreeper.log"

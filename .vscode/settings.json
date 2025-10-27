@@ -1,0 +1,38 @@
+{
+    "cSpell.words": [
+        "Argb",
+        "behavior",
+        "CUDA",
+        "dialog",
+        "hostapi",
+        "icns",
+        "indata",
+        "Lingala",
+        "mypy",
+        "ndarray",
+        "numpy",
+        "Nynorsk",
+        "onefile",
+        "prob",
+        "psutil",
+        "pydub",
+        "pyinstaller",
+        "pytest",
+        "pyyaml",
+        "randn",
+        "rect",
+        "resampler",
+        "samplerate",
+        "Sinhala",
+        "sounddevice",
+        "Tajik",
+        "torchaudio",
+        "Transcreeper",
+        "venv",
+        "WASAPI"
+    ],
+    "markdownlint.config": {
+        "no-inline-html": false,
+        "no-emphasis-as-heading": false
+    }
+}

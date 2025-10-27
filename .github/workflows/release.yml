@@ -1,0 +1,192 @@
+name: Release
+
+on:
+    push:
+        tags:
+            - "v*"
+    workflow_dispatch:
+        inputs:
+            version:
+                description: "Version number (e.g., 1.0.0)"
+                required: true
+            prerelease:
+                description: "Is this a pre-release?"
+                required: true
+                type: boolean
+                default: false
+
+jobs:
+    create-release:
+        runs-on: ubuntu-latest
+        outputs:
+            upload_url: ${{ steps.create_release.outputs.upload_url }}
+            version: ${{ steps.get_version.outputs.version }}
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Get version
+              id: get_version
+              run: |
+                  if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+                    echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+                    echo "tag=v${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+                  else
+                    echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+                    echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+                  fi
+
+            - name: Create tag (workflow_dispatch only)
+              if: github.event_name == 'workflow_dispatch'
+              run: |
+                  git config user.name github-actions
+                  git config user.email github-actions@github.com
+                  git tag -a v${{ github.event.inputs.version }} -m "Release v${{ github.event.inputs.version }}"
+                  git push origin v${{ github.event.inputs.version }}
+
+            - name: Create Release
+              id: create_release
+              uses: actions/create-release@v1
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              with:
+                  tag_name: ${{ steps.get_version.outputs.tag }}
+                  release_name: Release ${{ steps.get_version.outputs.version }}
+                  draft: false
+                  prerelease: ${{ github.event.inputs.prerelease || false }}
+                  body: |
+                      ## TransCreeper v${{ steps.get_version.outputs.version }}
+
+                      ### Features
+                      - High-performance real-time transcription using faster-whisper-large-v3
+                      - Multi-language support (99 languages)
+                      - Real-time translation
+                      - Customizable subtitle display
+                      - System audio and microphone capture
+
+                      ### Downloads
+                      - **Windows**: TransCreeper-Windows-v${{ steps.get_version.outputs.version }}.exe
+                      - **macOS**: TransCreeper-macOS-v${{ steps.get_version.outputs.version }}.dmg
+                      - **Linux**: TransCreeper-Linux-v${{ steps.get_version.outputs.version }}.AppImage
+
+                      ### Installation
+
+                      #### Windows
+                      1. Download the .exe file
+                      2. Run the installer
+                      3. Follow the installation wizard
+
+                      #### macOS
+                      1. Download the .dmg file
+                      2. Open the DMG
+                      3. Drag TransCreeper to Applications
+
+                      #### Linux
+                      1. Download the .AppImage file
+                      2. Make it executable: `chmod +x TransCreeper-Linux-v${{ steps.get_version.outputs.version }}.AppImage`
+                      3. Run: `./TransCreeper-Linux-v${{ steps.get_version.outputs.version }}.AppImage`
+
+                      ### System Requirements
+                      - **GPU**: NVIDIA GPU with CUDA support (recommended for best performance)
+                      - **CPU**: Modern multi-core processor (CPU-only mode available)
+                      - **RAM**: Minimum 8GB, 16GB recommended
+                      - **Disk**: 5GB free space for models
+
+                      ### What's Changed
+                      - See CHANGELOG.md for details
+
+    build-and-upload:
+        needs: create-release
+        strategy:
+            matrix:
+                include:
+                    - os: windows-latest
+                      artifact-name: TransCreeper-Windows
+                      asset-name: TransCreeper-Windows-v${{ needs.create-release.outputs.version }}.exe
+                      build-command: |
+                          pip install pyinstaller
+                          pyinstaller --name="TransCreeper" ^
+                                      --windowed ^
+                                      --onefile ^
+                                      --icon=resources/icon.ico ^
+                                      --add-data="resources;resources" ^
+                                      src/main.py
+                      asset-path: dist/TransCreeper.exe
+
+                    - os: macos-latest
+                      artifact-name: TransCreeper-macOS
+                      asset-name: TransCreeper-macOS-v${{ needs.create-release.outputs.version }}.dmg
+                      build-command: |
+                          pip install pyinstaller
+                          pyinstaller --name="TransCreeper" \
+                                      --windowed \
+                                      --onefile \
+                                      --icon=resources/icon.icns \
+                                      --add-data="resources:resources" \
+                                      --osx-bundle-identifier=com.transcreeper.app \
+                                      src/main.py
+                          mkdir -p dist/dmg
+                          cp -r "dist/TransCreeper.app" dist/dmg/
+                          ln -s /Applications dist/dmg/Applications
+                          hdiutil create -volname "TransCreeper" \
+                                         -srcfolder dist/dmg \
+                                         -ov \
+                                         -format UDZO \
+                                         dist/TransCreeper-macOS.dmg
+                      asset-path: dist/TransCreeper-macOS.dmg
+
+                    - os: ubuntu-latest
+                      artifact-name: TransCreeper-Linux
+                      asset-name: TransCreeper-Linux-v${{ needs.create-release.outputs.version }}.AppImage
+                      build-command: |
+                          sudo apt-get update
+                          sudo apt-get install -y portaudio19-dev python3-pyqt6
+                          pip install pyinstaller
+                          pyinstaller --name="TransCreeper" \
+                                      --windowed \
+                                      --onefile \
+                                      --add-data="resources:resources" \
+                                      src/main.py
+                          wget -c https://github.com/$(wget -q https://github.com/probonopd/go-appimage/releases -O - | grep "appimagetool-.*-x86_64.AppImage" | head -n 1 | cut -d '"' -f 2)
+                          chmod +x appimagetool-*.AppImage
+                          mkdir -p AppDir/usr/bin
+                          mkdir -p AppDir/usr/share/applications
+                          cp dist/TransCreeper AppDir/usr/bin/
+                          cat > AppDir/usr/share/applications/transcreeper.desktop <<EOL
+                          [Desktop Entry]
+                          Name=TransCreeper
+                          Exec=TransCreeper
+                          Icon=transcreeper
+                          Type=Application
+                          Categories=Utility;AudioVideo;
+                          EOL
+                          ./appimagetool-*.AppImage AppDir dist/TransCreeper-Linux.AppImage
+                      asset-path: dist/TransCreeper-Linux.AppImage
+
+        runs-on: ${{ matrix.os }}
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.11"
+
+            - name: Install dependencies
+              run: |
+                  python -m pip install --upgrade pip
+                  pip install -r requirements.txt
+
+            - name: Build application
+              run: ${{ matrix.build-command }}
+
+            - name: Upload Release Asset
+              uses: actions/upload-release-asset@v1
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              with:
+                  upload_url: ${{ needs.create-release.outputs.upload_url }}
+                  asset_path: ${{ matrix.asset-path }}
+                  asset_name: ${{ matrix.asset-name }}
+                  asset_content_type: application/octet-stream
